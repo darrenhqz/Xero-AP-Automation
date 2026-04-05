@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AP Automation — Invoice Processor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            app: { bg: '#0b0e11', surface: '#141820', border: '#2a3142', accent: '#3b82f6' }
+          },
+          fontFamily: {
+            sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.92); }
+    }
+    .status-pulse { animation: pulse-dot 2s ease-in-out infinite; }
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in { animation: fade-in-up 0.45s ease-out forwards; }
+    .drop-zone-active { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.08) !important; }
+    @keyframes spin-slow {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      width: 1.125rem;
+      height: 1.125rem;
+      border: 2px solid #2a3142;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin-slow 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#0b0e11] text-slate-200 font-sans antialiased">
+  <!-- Top bar -->
+  <header class="sticky top-0 z-50 border-b border-[#2a3142] bg-[#0b0e11]/95 backdrop-blur-sm">
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#3b82f6] text-lg shadow-lg shadow-blue-500/20" aria-hidden="true">
+          <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-semibold tracking-tight text-white sm:text-lg">AP Automation</h1>
+          <p class="text-xs text-slate-500 sm:text-sm">Invoice Processor</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-sm text-slate-400">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="status-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+          <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+        </span>
+        <span>System Online</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <!-- Upload hero -->
+    <section id="upload-section" class="rounded-xl border border-[#2a3142] bg-[#141820] p-6 sm:p-8">
+      <div
+        id="drop-zone"
+        class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#2a3142] bg-[#0b0e11]/50 px-6 py-14 transition-colors duration-200 hover:border-[#3b82f6]/60 hover:bg-[#0b0e11]/80"
+        role="button"
+        tabindex="0"
+        aria-label="Upload invoice file"
+      >
+        <p class="text-center text-slate-300 sm:text-lg">Drop invoice PDF here or click to upload</p>
+        <p class="mt-2 text-center text-xs text-slate-500">PDF, PNG, JPG · Max file size: 10MB</p>
+        <input type="file" id="file-input" class="hidden" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" />
+      </div>
+      <div id="file-confirm" class="mt-6 hidden">
+        <div class="flex flex-col gap-4 rounded-lg border border-[#2a3142] bg-[#0b0e11]/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-medium text-white" id="file-name"></p>
+            <p class="mt-1 text-xs text-slate-500" id="file-size"></p>
+          </div>
+          <button
+            type="button"
+            id="btn-process"
+            class="rounded-lg bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#141820]"
+          >
+            Process Invoice
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error banner (network / timeout) -->
+    <div id="error-banner" class="mt-6 hidden rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200"></div>
+
+    <!-- Processing -->
+    <section id="processing-section" class="mt-8 hidden rounded-xl border border-[#2a3142] bg-[#141820] p-6 sm:p-8">
+      <div class="mb-6 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="text-lg font-semibold text-white">Processing</h2>
+        <p class="font-mono text-sm text-slate-400"><span class="text-slate-500">Elapsed:</span> <span id="elapsed">0.0s</span></p>
+      </div>
+      <ol id="steps-list" class="space-y-4">
+        <!-- Steps injected by JS -->
+      </ol>
+    </section>
+
+    <!-- Extracted data -->
+    <section id="extracted-card" class="mt-8 hidden animate-fade-in rounded-xl border border-[#2a3142] bg-[#141820] p-6 sm:p-8">
+      <h2 class="mb-4 text-lg font-semibold text-white">Extracted Invoice Data</h2>
+      <div id="low-confidence-banner" class="mb-4 hidden rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+        ⚠ Low confidence extraction — manual review recommended
+      </div>
+      <div id="extracted-grid" class="grid gap-4 sm:grid-cols-2"></div>
+      <h3 class="mb-3 mt-8 text-sm font-medium text-slate-400">Line Items</h3>
+      <div class="overflow-x-auto rounded-lg border border-[#2a3142]">
+        <table class="w-full min-w-[640px] text-left text-sm">
+          <thead class="border-b border-[#2a3142] bg-[#0b0e11]/60 font-mono text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th class="px-4 py-3 font-medium">Description</th>
+              <th class="px-4 py-3 font-medium">Qty</th>
+              <th class="px-4 py-3 font-medium">Unit Price</th>
+              <th class="px-4 py-3 font-medium">Amount</th>
+              <th class="px-4 py-3 font-medium">Tax Rate</th>
+            </tr>
+          </thead>
+          <tbody id="line-items-body" class="divide-y divide-[#2a3142] text-slate-300"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Xero result -->
+    <section id="xero-card" class="mt-8 hidden animate-fade-in rounded-xl border border-[#2a3142] bg-[#141820] p-6 sm:p-8">
+      <h2 class="mb-4 text-lg font-semibold text-white">Xero Bill Created</h2>
+      <div class="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-4 py-3 text-sm text-emerald-200">
+        Draft bill was created successfully in Xero.
+      </div>
+      <dl class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Invoice ID</dt>
+          <dd id="xero-invoice-id" class="mt-1 font-mono text-sm text-white"></dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Status</dt>
+          <dd id="xero-status" class="mt-1 font-mono text-sm text-emerald-400">DRAFT</dd>
+        </div>
+      </dl>
+      <p class="mt-4">
+        <a href="#" id="xero-link" class="text-sm font-medium text-[#3b82f6] hover:underline">View in Xero</a>
+      </p>
+    </section>
+
+    <!-- Reset -->
+    <div id="reset-wrap" class="mt-8 hidden">
+      <button
+        type="button"
+        id="btn-reset"
+        class="rounded-lg border border-[#2a3142] bg-[#141820] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:ring-offset-2 focus:ring-offset-[#0b0e11]"
+      >
+        Reset
+      </button>
+    </div>
+
+    <!-- Activity log -->
+    <section class="mt-10 rounded-xl border border-[#2a3142] bg-[#141820] p-4 sm:p-6">
+      <h2 class="mb-3 text-sm font-semibold text-slate-400">Activity log</h2>
+      <div id="log-container" class="max-h-56 overflow-y-auto rounded-lg border border-[#2a3142] bg-[#0b0e11] p-3 font-mono text-xs text-slate-400 sm:max-h-64"></div>
+    </section>
+  </main>
+
+  <script>
+    // CONFIGURATION — Update this URL when deploying
+    const WEBHOOK_URL = 'https://n8n-production-21321.up.railway.app/webhook/process-invoice';
+
+    const MAX_BYTES = 10 * 1024 * 1024;
+    const FETCH_TIMEOUT_MS = 60000;
+
+    const STEP_LABELS = [
+      'Uploading document',
+      'AI extracting invoice data',
+      'Validating extracted fields',
+      'Creating draft bill in Xero',
+      'Complete'
+    ];
+
+    const els = {
+      dropZone: document.getElementById('drop-zone'),
+      fileInput: document.getElementById('file-input'),
+      fileConfirm: document.getElementById('file-confirm'),
+      fileName: document.getElementById('file-name'),
+      fileSize: document.getElementById('file-size'),
+      btnProcess: document.getElementById('btn-process'),
+      processingSection: document.getElementById('processing-section'),
+      stepsList: document.getElementById('steps-list'),
+      elapsed: document.getElementById('elapsed'),
+      extractedCard: document.getElementById('extracted-card'),
+      extractedGrid: document.getElementById('extracted-grid'),
+      lineItemsBody: document.getElementById('line-items-body'),
+      lowConfidenceBanner: document.getElementById('low-confidence-banner'),
+      xeroCard: document.getElementById('xero-card'),
+      xeroInvoiceId: document.getElementById('xero-invoice-id'),
+      logContainer: document.getElementById('log-container'),
+      errorBanner: document.getElementById('error-banner'),
+      resetWrap: document.getElementById('reset-wrap'),
+      btnReset: document.getElementById('btn-reset')
+    };
+
+    let selectedFile = null;
+    let elapsedTimer = null;
+    let processStart = 0;
+
+    function formatBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function log(msg) {
+      const t = new Date().toISOString().replace('T', ' ').slice(0, 23);
+      const line = document.createElement('div');
+      line.className = 'border-b border-[#2a3142]/50 py-1.5 last:border-0';
+      line.textContent = `[${t}] ${msg}`;
+      els.logContainer.appendChild(line);
+      els.logContainer.scrollTop = els.logContainer.scrollHeight;
+    }
+
+    function showErrorBanner(text) {
+      els.errorBanner.textContent = text;
+      els.errorBanner.classList.remove('hidden');
+    }
+
+    function hideErrorBanner() {
+      els.errorBanner.classList.add('hidden');
+    }
+
+    function buildSteps() {
+      els.stepsList.innerHTML = '';
+      STEP_LABELS.forEach((label, i) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-3';
+        li.dataset.step = String(i);
+        li.innerHTML = `
+          <span class="step-icon mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center" data-icon></span>
+          <span class="step-label text-sm text-slate-400">${label}</span>
+        `;
+        els.stepsList.appendChild(li);
+      });
+    }
+
+    function setStepState(index, state) {
+      const li = els.stepsList.querySelector(`[data-step="${index}"]`);
+      if (!li) return;
+      const icon = li.querySelector('[data-icon]');
+      const label = li.querySelector('.step-label');
+      icon.innerHTML = '';
+      icon.className = 'step-icon mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center';
+      label.classList.remove('text-white', 'text-red-400');
+      label.classList.add('text-slate-400');
+
+      if (state === 'active') {
+        const sp = document.createElement('span');
+        sp.className = 'spinner';
+        icon.appendChild(sp);
+        label.classList.remove('text-slate-400');
+        label.classList.add('text-white');
+      } else if (state === 'done') {
+        icon.innerHTML = '<svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+        label.classList.remove('text-slate-400');
+        label.classList.add('text-slate-300');
+      } else if (state === 'failed') {
+        icon.innerHTML = '<svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+        label.classList.remove('text-slate-400');
+        label.classList.add('text-red-400');
+      } else {
+        icon.innerHTML = '<span class="h-2 w-2 rounded-full bg-[#2a3142]"></span>';
+      }
+    }
+
+    function resetAllSteps() {
+      for (let i = 0; i < STEP_LABELS.length; i++) setStepState(i, 'pending');
+    }
+
+    function pickFirstInvoice(data) {
+      if (!data || typeof data !== 'object') return null;
+      if (data.Invoices && Array.isArray(data.Invoices) && data.Invoices[0]) return data.Invoices[0];
+      if (data.Invoice && typeof data.Invoice === 'object') return data.Invoice;
+      if (data.body && typeof data.body === 'object') return pickFirstInvoice(data.body);
+      if (Array.isArray(data) && data[0] && typeof data[0] === 'object') {
+        const first = data[0];
+        if (first.json) return pickFirstInvoice(first.json);
+        return pickFirstInvoice(first);
+      }
+      if (data.json) return pickFirstInvoice(data.json);
+      return data;
+    }
+
+    function numOrDash(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '—';
+      return String(v);
+    }
+
+    function extractFields(payload) {
+      const inv = pickFirstInvoice(payload) || payload;
+      const contact = inv.Contact || inv.contact || {};
+      const vendor =
+        inv.vendor_name ||
+        contact.Name ||
+        contact.name ||
+        inv.Supplier ||
+        '—';
+
+      const confidence =
+        inv.confidence_score != null
+          ? Number(inv.confidence_score)
+          : inv.confidence != null
+            ? Number(inv.confidence)
+            : null;
+
+      return {
+        vendor_name: vendor,
+        invoice_number: inv.InvoiceNumber || inv.invoice_number || inv.Number || '—',
+        invoice_date: inv.DateString || inv.invoice_date || inv.Date || '—',
+        due_date: inv.DueDateString || inv.due_date || inv.DueDate || '—',
+        currency: inv.CurrencyCode || inv.currency || '—',
+        subtotal: inv.SubTotal != null ? inv.SubTotal : inv.subtotal,
+        tax_amount: inv.TotalTax != null ? inv.TotalTax : inv.tax_amount,
+        total_amount: inv.Total != null ? inv.Total : inv.AmountDue != null ? inv.AmountDue : inv.total_amount,
+        tax_type: inv.LineAmountTypes || inv.tax_type || '—',
+        confidence_score: confidence,
+        lineItems: normalizeLineItems(inv)
+      };
+    }
+
+    function normalizeLineItems(inv) {
+      const raw = inv.LineItems || inv.line_items || inv.lines || [];
+      if (!Array.isArray(raw) || raw.length === 0) return [];
+      return raw.map((line) => ({
+        description: line.Description || line.description || '—',
+        qty: line.Quantity != null ? line.Quantity : line.qty,
+        unitPrice: line.UnitAmount != null ? line.UnitAmount : line.unit_price,
+        amount: line.LineAmount != null ? line.LineAmount : line.amount,
+        taxRate: line.TaxType || line.TaxRate || line.tax_rate || '—'
+      }));
+    }
+
+    function confidenceBadgeClass(score) {
+      if (score == null || Number.isNaN(score)) return 'bg-slate-600 text-white';
+      if (score >= 0.8) return 'bg-emerald-600/90 text-white';
+      if (score >= 0.7) return 'bg-amber-600/90 text-white';
+      return 'bg-red-600/90 text-white';
+    }
+
+    function renderExtracted(fields, needsReview) {
+      els.extractedGrid.innerHTML = '';
+      const rows = [
+        ['Vendor Name', fields.vendor_name],
+        ['Invoice Number', fields.invoice_number],
+        ['Invoice Date', fields.invoice_date],
+        ['Due Date', fields.due_date],
+        ['Currency', fields.currency],
+        ['Subtotal', numOrDash(fields.subtotal)],
+        ['Tax Amount', numOrDash(fields.tax_amount)],
+        ['Total Amount', numOrDash(fields.total_amount)],
+        ['Tax Type', fields.tax_type]
+      ];
+
+      const conf = fields.confidence_score;
+      const badge =
+        conf != null && !Number.isNaN(conf)
+          ? `<span class="inline-flex rounded px-2 py-0.5 text-xs font-medium ${confidenceBadgeClass(conf)}">${conf.toFixed(2)}</span>`
+          : '—';
+
+      rows.forEach(([k, v]) => {
+        const div = document.createElement('div');
+        div.className = 'rounded-lg border border-[#2a3142] bg-[#0b0e11]/40 px-3 py-2';
+        div.innerHTML = `<dt class="text-xs text-slate-500">${escapeHtml(k)}</dt><dd class="mt-1 text-sm text-white">${escapeHtml(String(v))}</dd>`;
+        els.extractedGrid.appendChild(div);
+      });
+
+      const confDiv = document.createElement('div');
+      confDiv.className = 'rounded-lg border border-[#2a3142] bg-[#0b0e11]/40 px-3 py-2';
+      confDiv.innerHTML = `<dt class="text-xs text-slate-500">Confidence Score</dt><dd class="mt-1">${badge}</dd>`;
+      els.extractedGrid.appendChild(confDiv);
+
+      els.lineItemsBody.innerHTML = '';
+      if (fields.lineItems.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" class="px-4 py-6 text-center text-slate-500">No line items in response</td>';
+        els.lineItemsBody.appendChild(tr);
+      } else {
+        fields.lineItems.forEach((line) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="px-4 py-2 text-slate-300">${escapeHtml(String(line.description))}</td>
+            <td class="px-4 py-2 font-mono text-slate-400">${escapeHtml(numOrDash(line.qty))}</td>
+            <td class="px-4 py-2 font-mono text-slate-400">${escapeHtml(numOrDash(line.unitPrice))}</td>
+            <td class="px-4 py-2 font-mono text-slate-400">${escapeHtml(numOrDash(line.amount))}</td>
+            <td class="px-4 py-2 font-mono text-slate-400">${escapeHtml(String(line.taxRate))}</td>
+          `;
+          els.lineItemsBody.appendChild(tr);
+        });
+      }
+
+      const low = needsReview || (conf != null && !Number.isNaN(conf) && conf < 0.7);
+      els.lowConfidenceBanner.classList.toggle('hidden', !low);
+      els.extractedCard.classList.remove('hidden');
+      void els.extractedCard.offsetWidth;
+      els.extractedCard.classList.add('animate-fade-in');
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function getXeroInvoiceId(payload) {
+      const inv = pickFirstInvoice(payload);
+      if (!inv || typeof inv !== 'object') return null;
+      return inv.InvoiceID || inv.InvoiceId || inv.invoice_id || inv.Id || null;
+    }
+
+    function renderXero(payload) {
+      const id = getXeroInvoiceId(payload);
+      els.xeroInvoiceId.textContent = id ? String(id) : '—';
+      els.xeroCard.classList.remove('hidden');
+      void els.xeroCard.offsetWidth;
+      els.xeroCard.classList.add('animate-fade-in');
+    }
+
+    function parseJsonResponse(text) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: 'Invalid JSON response', raw: text };
+      }
+    }
+
+    async function runProcess() {
+      if (!selectedFile) return;
+      hideErrorBanner();
+      els.processingSection.classList.remove('hidden');
+      els.extractedCard.classList.add('hidden');
+      els.xeroCard.classList.add('hidden');
+      els.resetWrap.classList.add('hidden');
+      buildSteps();
+      resetAllSteps();
+
+      processStart = performance.now();
+      els.elapsed.textContent = '0.0s';
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      elapsedTimer = setInterval(() => {
+        const s = ((performance.now() - processStart) / 1000).toFixed(1);
+        els.elapsed.textContent = s + 's';
+      }, 100);
+
+      setStepState(0, 'active');
+      log('Upload started — sending file to processing server');
+
+      const step1Timer = setTimeout(() => {
+        setStepState(0, 'done');
+        setStepState(1, 'active');
+        log('AI extracting invoice data…');
+      }, 400);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+      const form = new FormData();
+      form.append('file', selectedFile, selectedFile.name);
+
+      let data;
+      try {
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body: form, signal: controller.signal });
+        clearTimeout(timeoutId);
+        clearTimeout(step1Timer);
+        const text = await res.text();
+        data = parseJsonResponse(text);
+        if (!res.ok) {
+          data = { error: data.error || data.message || `HTTP ${res.status}`, ...data };
+        }
+      } catch (e) {
+        clearTimeout(timeoutId);
+        clearTimeout(step1Timer);
+        if (elapsedTimer) clearInterval(elapsedTimer);
+        for (let i = 0; i < 5; i++) setStepState(i, 'pending');
+        setStepState(0, 'done');
+        setStepState(1, 'failed');
+        const msg =
+          e.name === 'AbortError'
+            ? 'Request timed out after 60 seconds'
+            : 'Failed to connect to processing server';
+        showErrorBanner(msg === 'Failed to connect to processing server' ? 'Failed to connect to processing server' : msg);
+        log('ERROR: ' + msg + (e.message ? ' — ' + e.message : ''));
+        els.resetWrap.classList.remove('hidden');
+        return;
+      }
+
+      if (elapsedTimer) clearInterval(elapsedTimer);
+
+      setStepState(0, 'done');
+      setStepState(1, 'done');
+      setStepState(2, 'active');
+      log('Response received — validating extracted fields');
+
+      await new Promise((r) => setTimeout(r, 350));
+      setStepState(2, 'done');
+
+      const hasError = data && data.error != null && data.error !== false && data.error !== '';
+      const needsReview = data && (data.status === 'needs_review' || data.needs_review === true);
+
+      if (hasError || needsReview) {
+        setStepState(3, 'active');
+        await new Promise((r) => setTimeout(r, 250));
+        setStepState(3, 'failed');
+        log(
+          hasError
+            ? 'Processing error: ' + (typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
+            : 'Flagged for review: ' + (data.reason || 'needs_review')
+        );
+        const fields = extractFields(data);
+        renderExtracted(fields, true);
+        log('Extraction data displayed (review path)');
+        els.resetWrap.classList.remove('hidden');
+        return;
+      }
+
+      setStepState(3, 'active');
+      log('Creating draft bill in Xero (per workflow response)');
+      await new Promise((r) => setTimeout(r, 450));
+      setStepState(3, 'done');
+      setStepState(4, 'active');
+      await new Promise((r) => setTimeout(r, 250));
+      setStepState(4, 'done');
+
+      const fields = extractFields(data);
+      renderExtracted(fields, false);
+      log('Extraction complete — fields validated');
+      renderXero(data);
+      log('Xero draft bill created successfully');
+      els.resetWrap.classList.remove('hidden');
+    }
+
+    function onFile(file) {
+      if (!file) return;
+      if (file.size > MAX_BYTES) {
+        showErrorBanner('File exceeds 10MB limit');
+        log('ERROR: File too large');
+        return;
+      }
+      hideErrorBanner();
+      selectedFile = file;
+      els.fileName.textContent = file.name;
+      els.fileSize.textContent = formatBytes(file.size);
+      els.fileConfirm.classList.remove('hidden');
+    }
+
+    els.dropZone.addEventListener('click', () => els.fileInput.click());
+    els.dropZone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        els.fileInput.click();
+      }
+    });
+
+    els.fileInput.addEventListener('change', () => {
+      const f = els.fileInput.files && els.fileInput.files[0];
+      if (f) onFile(f);
+    });
+
+    ['dragenter', 'dragover'].forEach((ev) => {
+      els.dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        els.dropZone.classList.add('drop-zone-active');
+      });
+    });
+    ['dragleave', 'drop'].forEach((ev) => {
+      els.dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (ev !== 'drop') els.dropZone.classList.remove('drop-zone-active');
+      });
+    });
+    els.dropZone.addEventListener('drop', (e) => {
+      els.dropZone.classList.remove('drop-zone-active');
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) onFile(f);
+    });
+
+    els.btnProcess.addEventListener('click', () => runProcess());
+
+    els.btnReset.addEventListener('click', () => {
+      selectedFile = null;
+      els.fileInput.value = '';
+      els.fileConfirm.classList.add('hidden');
+      els.processingSection.classList.add('hidden');
+      els.extractedCard.classList.add('hidden');
+      els.xeroCard.classList.add('hidden');
+      els.resetWrap.classList.add('hidden');
+      hideErrorBanner();
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      els.logContainer.innerHTML = '';
+      log('Session reset — ready for new upload');
+    });
+
+    log('Dashboard ready — awaiting invoice upload');
+  </script>
+</body>
+</html>
