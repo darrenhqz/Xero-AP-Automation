@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HF Invest Group — Invoice Processing</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f1f4f9;
+    --surface: #ffffff;
+    --nav-bg: #0a1628;
+    --nav-text: #94a3b8;
+    --nav-active: #3b82f6;
+    --ink: #1e293b;
+    --ink-secondary: #475569;
+    --ink-muted: #94a3b8;
+    --blue: #3b82f6;
+    --blue-light: #dbeafe;
+    --blue-dark: #1e40af;
+    --green: #10b981;
+    --green-light: #d1fae5;
+    --green-dark: #065f46;
+    --amber: #f59e0b;
+    --amber-light: #fef3c7;
+    --red: #ef4444;
+    --red-light: #fee2e2;
+    --border: #e2e8f0;
+    --sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--ink); min-height: 100vh; }
+
+  /* ---- NAV ---- */
+  .nav {
+    background: var(--nav-bg); padding: 0 32px;
+    display: flex; align-items: center; height: 56px; gap: 32px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-brand { display: flex; align-items: center; gap: 12px; margin-right: 24px; flex-shrink: 0; }
+  .nav-brand-name { font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: -0.3px; }
+  .nav-brand-divider { width: 1px; height: 20px; background: #334155; }
+  .nav-brand-sub { font-size: 13px; font-weight: 500; color: var(--nav-active); letter-spacing: 0.2px; }
+  .nav-links { display: flex; gap: 4px; height: 100%; align-items: center; }
+  .nav-link {
+    padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--nav-text);
+    text-decoration: none; border-radius: 6px; transition: all 0.15s; position: relative;
+  }
+  .nav-link:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); }
+  .nav-link.active { color: #ffffff; background: rgba(59,130,246,0.15); }
+  .nav-link.active::after {
+    content: ''; position: absolute; bottom: -12px; left: 16px; right: 16px;
+    height: 2px; background: var(--blue); border-radius: 1px;
+  }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .nav-date { font-size: 12px; color: var(--nav-text); font-family: var(--mono); }
+
+  /* ---- MAIN ---- */
+  .main { max-width: 960px; margin: 0 auto; padding: 28px 32px; }
+  .page-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
+  .page-title { font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: -0.3px; }
+  .page-subtitle { font-size: 13px; color: var(--ink-muted); }
+
+  /* ---- CARD ---- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 28px; margin-bottom: 20px;
+    animation: fadeUp 0.4s ease-out both;
+  }
+  .card:nth-child(2) { animation-delay: 0.05s; }
+
+  .card-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .card-desc { font-size: 12px; color: var(--ink-muted); margin-bottom: 20px; }
+
+  /* ---- FORM ---- */
+  .form-group { margin-bottom: 18px; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .form-select {
+    width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: var(--sans); color: var(--ink); background: var(--surface);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .form-select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+  /* ---- DROP ZONE ---- */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 40px 24px;
+    text-align: center; transition: all 0.2s; cursor: pointer; position: relative;
+  }
+  .drop-zone:hover { border-color: var(--blue); background: var(--blue-light); }
+  .drop-zone.dragover { border-color: var(--blue); background: var(--blue-light); }
+  .drop-zone.has-file { border-color: var(--green); border-style: solid; background: var(--green-light); }
+  .drop-zone-icon { font-size: 28px; margin-bottom: 8px; color: var(--ink-muted); }
+  .drop-zone-text { font-size: 13px; color: var(--ink-secondary); font-weight: 500; }
+  .drop-zone-hint { font-size: 11px; color: var(--ink-muted); margin-top: 4px; }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* ---- FILE LIST ---- */
+  .file-list { margin-top: 12px; }
+  .file-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; background: var(--bg); border-radius: 6px;
+    margin-bottom: 4px; font-size: 13px; border: 1px solid var(--border);
+  }
+  .file-info { display: flex; align-items: center; gap: 8px; }
+  .file-icon { font-size: 14px; }
+  .file-name-text { font-weight: 600; color: var(--ink); }
+  .file-size-text { color: var(--ink-muted); font-size: 11px; font-family: var(--mono); }
+  .file-remove {
+    color: var(--red); cursor: pointer; font-size: 11px; font-weight: 600;
+    border: none; background: none; padding: 4px 8px; border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .file-remove:hover { background: var(--red-light); }
+  .file-count { font-size: 12px; color: var(--ink-muted); margin-top: 8px; font-family: var(--mono); }
+
+  /* ---- BUTTON ---- */
+  .btn-upload {
+    width: 100%; padding: 12px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; font-family: var(--sans);
+    cursor: pointer; transition: background 0.15s; margin-top: 4px;
+  }
+  .btn-upload:hover { background: var(--blue-dark); }
+  .btn-upload:disabled { background: var(--ink-muted); cursor: not-allowed; }
+
+  /* ---- PROGRESS ---- */
+  .progress-section { margin-top: 20px; display: none; }
+  .progress-section.show { display: block; }
+  .progress-bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+  .progress-bar { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.3s; width: 0%; }
+  .progress-text { font-size: 12px; color: var(--ink-secondary); margin-bottom: 14px; font-family: var(--mono); }
+
+  /* ---- RESULT ROWS ---- */
+  .result-row {
+    padding: 12px 14px; border-radius: 8px; margin-bottom: 6px;
+    font-size: 13px; display: flex; align-items: center; gap: 10px;
+    border: 1px solid transparent;
+  }
+  .result-row.success { background: var(--green-light); border-color: #a7f3d0; color: var(--green-dark); }
+  .result-row.error { background: var(--red-light); border-color: #fecaca; color: var(--red); }
+  .result-row.processing { background: var(--amber-light); border-color: #fde68a; color: #92400e; }
+  .result-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+  .result-details { flex: 1; min-width: 0; }
+  .result-filename { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-info { font-size: 11px; margin-top: 2px; opacity: 0.85; }
+  .result-amount { font-family: var(--mono); font-weight: 600; font-size: 13px; flex-shrink: 0; }
+
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(0,0,0,0.1); border-top-color: #92400e;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+  }
+  .spinner-btn {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <span class="nav-brand-name">HF Invest Group</span>
+    <div class="nav-brand-divider"></div>
+    <span class="nav-brand-sub">Accounting Dashboard</span>
+  </div>
+  <div class="nav-links">
+    <a href="hf_main_dashboard.html" class="nav-link">Dashboard</a>
+    <a href="#" class="nav-link active">Invoices</a>
+    <a href="#" class="nav-link">Month-End</a>
+    <a href="#" class="nav-link">Journals</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-date" id="currentDate"></span>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Invoice Processing</h1>
+      <p class="page-subtitle">Upload supplier invoices for automated extraction and Xero bill creation</p>
+    </div>
+  </div>
+
+  <!-- UPLOAD CARD -->
+  <div class="card">
+    <div class="card-title">Upload Invoices</div>
+    <div class="card-desc">Select the entity and upload one or more supplier invoices. Each is processed sequentially — data extracted, account coded, and posted as a draft bill.</div>
+
+    <div class="form-group">
+      <label class="form-label">Entity</label>
+      <select id="entitySelect" class="form-select">
+        <option value="" disabled selected>Select entity...</option>
+        <option value="DEMO">Xero Demo Company</option>
+        <option value="HFI">HF Invest Pte Ltd</option>
+        <option value="FIT">FIT Frisian Investment & Trading</option>
+        <option value="AIT">AIT Asian Investment & Trading</option>
+        <option value="HFH">HF Hunter Shipping</option>
+        <option value="BGS">Blue Giant Shipping</option>
+        <option value="HFT">HF Offshore Technology</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Invoice Files</label>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" multiple>
+        <div class="drop-zone-icon">📄</div>
+        <div class="drop-zone-text">Drop invoices here or click to browse</div>
+        <div class="drop-zone-hint">PDF, JPG, or PNG — select multiple files</div>
+      </div>
+      <div class="file-list" id="fileList"></div>
+      <div class="file-count" id="fileCount"></div>
+    </div>
+
+    <button class="btn-upload" id="uploadBtn" disabled>Upload & Process</button>
+
+    <div class="progress-section" id="progressSection">
+      <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-text" id="progressText"></div>
+      <div id="resultsList"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">HF Invest Group — Accounting Dashboard &nbsp;·&nbsp; Powered by Arcfin</div>
+
+<script>
+// Date
+const now = new Date();
+const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+document.getElementById('currentDate').textContent =
+  `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+
+// Config
+const WEBHOOK_URLS = {
+  'CRED1': 'https://n8n-production-8sjl.up.railway.app/webhook/e37cd11e-c216-4a53-89e4-35fb85e122d2',
+  'CRED2': 'https://n8n-production-8sjl.up.railway.app/webhook/4c0ef854-686e-4582-8578-9f8186a7c4a1'
+};
+const ENTITY_CRED_MAP = {
+  'HFI': 'CRED1', 'FIT': 'CRED1', 'AIT': 'CRED1', 'HFH': 'CRED1',
+  'DEMO': 'CRED2', 'BGS': 'CRED2', 'HFT': 'CRED2'
+};
+
+let selectedFiles = [];
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const fileCount = document.getElementById('fileCount');
+const uploadBtn = document.getElementById('uploadBtn');
+const entitySelect = document.getElementById('entitySelect');
+
+function checkReady() { uploadBtn.disabled = !(selectedFiles.length > 0 && entitySelect.value); }
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  selectedFiles.forEach((file, idx) => {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    const sizeKB = (file.size / 1024).toFixed(0);
+    const ext = file.name.split('.').pop().toUpperCase();
+    div.innerHTML = `
+      <div class="file-info">
+        <span class="file-icon">${ext === 'PDF' ? '📄' : '🖼️'}</span>
+        <span class="file-name-text">${file.name}</span>
+        <span class="file-size-text">${sizeKB} KB</span>
+      </div>
+      <button class="file-remove" data-idx="${idx}">Remove</button>
+    `;
+    fileList.appendChild(div);
+  });
+  fileCount.textContent = selectedFiles.length > 0 ? `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} ready` : '';
+  dropZone.classList.toggle('has-file', selectedFiles.length > 0);
+  checkReady();
+}
+
+fileList.addEventListener('click', (e) => {
+  if (e.target.classList.contains('file-remove')) {
+    selectedFiles.splice(parseInt(e.target.dataset.idx), 1);
+    renderFileList();
+  }
+});
+
+entitySelect.addEventListener('change', checkReady);
+fileInput.addEventListener('change', (e) => {
+  selectedFiles = [...selectedFiles, ...Array.from(e.target.files)];
+  fileInput.value = '';
+  renderFileList();
+});
+
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const newFiles = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.type.startsWith('image/'));
+  selectedFiles = [...selectedFiles, ...newFiles];
+  renderFileList();
+});
+
+uploadBtn.addEventListener('click', async () => {
+  if (selectedFiles.length === 0 || !entitySelect.value) return;
+
+  const entityCode = entitySelect.value;
+  const entityName = entitySelect.options[entitySelect.selectedIndex].text;
+  const credGroup = ENTITY_CRED_MAP[entityCode];
+  const webhookUrl = WEBHOOK_URLS[credGroup];
+  const total = selectedFiles.length;
+
+  uploadBtn.disabled = true;
+  uploadBtn.innerHTML = `<span class="spinner-btn"></span>Processing ${total} invoice${total > 1 ? 's' : ''}...`;
+
+  const progressSection = document.getElementById('progressSection');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  const resultsList = document.getElementById('resultsList');
+
+  progressSection.classList.add('show');
+  resultsList.innerHTML = '';
+  progressBar.style.width = '0%';
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (let i = 0; i < total; i++) {
+    const file = selectedFiles[i];
+    progressBar.style.width = `${(i / total * 100).toFixed(0)}%`;
+    progressText.textContent = `${i + 1} / ${total} — ${file.name}`;
+
+    const rowId = `result-${i}`;
+    const row = document.createElement('div');
+    row.className = 'result-row processing';
+    row.id = rowId;
+    row.innerHTML = `<span class="result-icon"><span class="spinner"></span></span><div class="result-details"><div class="result-filename">${file.name}</div><div class="result-info">Processing...</div></div>`;
+    resultsList.appendChild(row);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('entityCode', entityCode);
+
+      const response = await fetch(webhookUrl, { method: 'POST', body: formData });
+      const data = await response.json();
+      const resultRow = document.getElementById(rowId);
+
+      if (data.error || data.needs_review) {
+        resultRow.className = 'result-row error';
+        resultRow.innerHTML = `
+          <span class="result-icon">⚠</span>
+          <div class="result-details">
+            <div class="result-filename">${file.name}</div>
+            <div class="result-info">${data.entity_match_reason || data.error || 'Low confidence — manual review required'}</div>
+          </div>
+        `;
+        errorCount++;
+      } else {
+        const vendor = data.vendor_name || data.xeroBody?.Contact?.Name || '—';
+        const amt = data.total_amount ? Number(data.total_amount).toLocaleString('en-US', {style:'currency', currency: data.currency || 'USD'}) : '';
+        const inv = data.invoice_number || data.xeroBody?.InvoiceNumber || '';
+        const conf = '';
+        resultRow.className = 'result-row success';
+        resultRow.innerHTML = `
+          <span class="result-icon">✓</span>
+          <div class="result-details">
+            <div class="result-filename">${vendor}</div>
+            <div class="result-info">${inv} · Draft bill created</div>
+          </div>
+          <div class="result-amount">${amt}</div>
+        `;
+        successCount++;
+      }
+    } catch (err) {
+      const resultRow = document.getElementById(rowId);
+      resultRow.className = 'result-row error';
+      resultRow.innerHTML = `
+        <span class="result-icon">✗</span>
+        <div class="result-details">
+          <div class="result-filename">${file.name}</div>
+          <div class="result-info">Network error: ${err.message}</div>
+        </div>
+      `;
+      errorCount++;
+    }
+  }
+
+  progressBar.style.width = '100%';
+  progressText.textContent = `Complete — ${successCount} processed · ${errorCount} flagged`;
+  uploadBtn.innerHTML = 'Upload & Process';
+  selectedFiles = [];
+  renderFileList();
+});
+</script>
+</body>
+</html>
